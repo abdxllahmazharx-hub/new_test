@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fine-Bank</title>
+<style>
+    body { font-family: Arial; background: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .box { background: white; padding: 20px; width: 350px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input, button, select { width: 100%; margin-top: 10px; padding: 10px; box-sizing: border-box; }
+    button { background: black; color: white; border: none; cursor: pointer; font-weight: bold; }
+    button:hover { background: #333; }
+    .hidden { display: none; }
+    .balance { text-align: center; font-size: 20px; margin: 10px 0; font-weight: bold; color: #2c3e50; }
+    .history { height: 100px; overflow-y: auto; font-size: 12px; background: #eee; padding: 5px; border: 1px solid #ddd; margin-top: 10px;}
+    .msg { font-size: 12px; margin-top: 5px; min-height: 15px; text-align: center; }
+    .error { color: red; }
+    .success { color: green; }
+    h2, h3 { margin: 10px 0; text-align: center; }
+    hr { margin: 15px 0; border: 0; border-top: 1px solid #eee; }
+</style>
+</head>
+<body>
+
+<div class="box" id="auth">
+    <h2>Fine-Bank</h2>
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
+    <button onclick="register()">Create Account</button>
+    <button onclick="login()">Login</button>
+    <p id="msg" class="msg"></p>
+</div>
+
+<div class="box hidden" id="bank">
+    <h2>Fine-Bank</h2>
+    <div class="balance">Your Balance: $<span id="bal">0</span></div>
+
+    <label style="font-size: 12px;">Select Bank Account:</label>
+    <select id="acc"></select>
+
+    <input id="amt" type="number" placeholder="Enter amount">
+
+    <div style="display: flex; gap: 5px;">
+        <button onclick="deposit()">Deposit</button>
+        <button onclick="withdraw()">Withdraw</button>
+    </div>
+
+    <button onclick="transfer()">Transfer to Acc</button>
+
+    <button onclick="daily()" style="background: #27ae60;">Claim Daily $50</button>
+
+    <h3>History</h3>
+    <div class="history" id="hist"></div>
+
+    <button onclick="logout()" style="background: #c0392b;">Logout</button>
+    <p id="bankMsg" class="msg"></p>
+</div>
+
+<script>
+let userData = {};
+let currentUser = null;
+
+// The accounts that actually hold the money
+let accounts = {
+    "ACC1001": 500,
+    "ACC1002": 1200,
+    "ACC1003": 300
+};
+
+function register() {
+    let u = user.value.trim();
+    let p = pass.value.trim();
+    if (!u || !p) return showAuth("Fill all fields", "error");
+
+    userData[u] = {
+        password: p,
+        balance: 100,
+        history: [],
+        lastReward: 0
+    };
+    showAuth("Account created!", "success");
+}
+
+function login() {
+    let u = user.value.trim();
+    let p = pass.value.trim();
+    if (userData[u] && userData[u].password === p) {
+        currentUser = u;
+        auth.classList.add("hidden");
+        bank.classList.remove("hidden");
+        updateUI();
+        showBank("Welcome!", "success");
+    } else {
+        showAuth("Wrong login", "error");
+    }
+}
+
+function updateUI() {
+    if (!currentUser) return;
+    
+    bal.innerText = userData[currentUser].balance;
+    
+    hist.innerHTML = userData[currentUser].history.length > 0 
+        ? userData[currentUser].history.join("<br>") 
+        : "No transactions.";
+
+    // Update Dropdown with real-time balances
+    let currentSelection = acc.value;
+    acc.innerHTML = "";
+    for (let k in accounts) {
+        let opt = document.createElement("option");
+        opt.value = k;
+        opt.textContent = `${k} (Bank: $${accounts[k]})`;
+        acc.appendChild(opt);
+    }
+    if(currentSelection) acc.value = currentSelection;
+}
+
+function addHistory(text) {
+    userData[currentUser].history.unshift(text);
+    updateUI();
+}
+
+function deposit() {
+    let a = Number(amt.value);
+    let target = acc.value;
+    if (!valid(a)) return;
+
+    // FIX: Check if the bank account actually has enough money to give you
+    if (a > accounts[target]) {
+        return showBank("Bank account only has $" + accounts[target], "error");
+    }
+
+    userData[currentUser].balance += a;
+    accounts[target] -= a; // Deduct from the bank
+    
+    addHistory(`Deposited $${a} from ${target}`);
+    showBank("Deposit successful", "success");
+    amt.value = "";
+}
+
+function withdraw() {
+    let a = Number(amt.value);
+    if (!valid(a)) return;
+
+    // Check if YOU have enough money to put back into the bank
+    if (a > userData[currentUser].balance) {
+        return showBank("You don't have enough money", "error");
+    }
+
+    userData[currentUser].balance -= a;
+    accounts[acc.value] += a; // Put it back into the selected bank account
+    
+    addHistory(`Withdrew $${a} to ${acc.value}`);
+    showBank("Withdraw successful", "success");
+    amt.value = "";
+}
+
+function transfer() {
+    // In this simplified version, transfer works like deposit
+    deposit(); 
+}
+
+function daily() {
+    let now = Date.now();
+    let last = userData[currentUser].lastReward;
+    if (now - last > 86400000) {
+        userData[currentUser].balance += 50;
+        userData[currentUser].lastReward = now;
+        addHistory("Daily reward +$50");
+        showBank("Reward claimed!", "success");
+    } else {
+        showBank("Come back tomorrow", "error");
+    }
+}
+
+function logout() {
+    currentUser = null;
+    bank.classList.add("hidden");
+    auth.classList.remove("hidden");
+}
+
+function valid(a) {
+    if (isNaN(a) || a <= 0) {
+        showBank("Invalid amount", "error");
+        return false;
+    }
+    return true;
+}
+
+function showAuth(text, type) {
+    msg.innerText = text;
+    msg.className = "msg " + type;
+}
+
+function showBank(text, type) {
+    bankMsg.innerText = text;
+    bankMsg.className = "msg " + type;
+}
+</script>
+</body>
+</html>
