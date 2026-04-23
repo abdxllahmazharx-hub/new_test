@@ -7,7 +7,7 @@
 
 <style>
 body { font-family: Arial; background: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-.box { background: white; padding: 20px; width: 350px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+.box { background: white; padding: 20px; width: 350px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; }
 input, button, select { width: 100%; margin-top: 10px; padding: 10px; box-sizing: border-box; }
 button { background: black; color: white; border: none; cursor: pointer; font-weight: bold; }
 button:hover { background: #333; }
@@ -17,6 +17,14 @@ button:hover { background: #333; }
 .error { color: red; }
 .success { color: green; }
 h2, h3 { margin: 10px 0; text-align: center; }
+
+.user-email {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    font-size: 11px;
+    color: #555;
+}
 </style>
 
 </head>
@@ -24,9 +32,11 @@ h2, h3 { margin: 10px 0; text-align: center; }
 <body>
 
 <div class="box">
-    <h2>Fine-Bank</h2>
+    <div class="user-email" id="userEmail">Loading...</div>
 
 ```
+<h2>Fine-Bank</h2>
+
 <div class="balance">Your Balance: $<span id="bal">0</span></div>
 
 <label style="font-size: 12px;">Select Bank Account:</label>
@@ -72,14 +82,14 @@ const db = getFirestore(app);
 let currentUser = null;
 let userData = null;
 
-// demo shared accounts (teacher: “simulation bank pool”)
+// shared demo accounts
 let accounts = {
     "ACC1001": 500,
     "ACC1002": 1200,
     "ACC1003": 300
 };
 
-// 🔐 AUTH PROTECTION (cannot open index.html without login)
+// 🔐 PROTECT PAGE
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.replace("login.html");
@@ -87,6 +97,8 @@ onAuthStateChanged(auth, (user) => {
     }
 
     currentUser = user.uid;
+    userEmail.innerText = user.email;
+
     loadData();
 });
 
