@@ -135,7 +135,7 @@ $<span id="bal">0</span>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
@@ -150,146 +150,155 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-let currentUser = null;
-let userData = null;
-
-const accounts = {
-    "ACC1001": 500,
-    "ACC1002": 1200,
-    "ACC1003": 300
-};
+let uid = null;
+let data = null;
 
 const bal = document.getElementById("bal");
-const email = document.getElementById("userEmail");
 const acc = document.getElementById("acc");
 const amt = document.getElementById("amt");
 const msg = document.getElementById("msg");
 const hist = document.getElementById("hist");
+const email = document.getElementById("userEmail");
 
-onAuthStateChanged(auth, (user) => {
-    if (!user) return window.location.replace("login.html");
+// dummy bank accounts
+const accounts = {
+  "ACC1001": 500,
+  "ACC1002": 1200,
+  "ACC1003": 300
+};
 
-    currentUser = user.uid;
-    email.innerText = user.email;
+// 🔐 AUTH
+onAuthStateChanged(auth, async (user) => {
+  if (!user) return window.location.replace("login.html");
 
-    const ref = doc(db, "users", currentUser);
+  uid = user.uid;
+  email.innerText = user.email;
 
-    onSnapshot(ref, (snap) => {
-        if (!snap.exists()) return;
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
 
-        userData = snap.data();
-
-        bal.innerText = userData.balance || 0;
-
-        hist.innerHTML = (userData.history || []).length
-            ? userData.history.join("<br>")
-            : "No transactions.";
+  // 🔥 AUTO CREATE USER (IMPORTANT FIX)
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      balance: 100,
+      history: [],
+      lastReward: 0
     });
+  }
 
-    loadAccounts();
+  listenData();
+  loadAccounts();
 });
 
-function loadAccounts() {
-    acc.innerHTML = "";
-    Object.keys(accounts).forEach(k => {
-        let opt = document.createElement("option");
-        opt.value = k;
-        opt.textContent = `${k} ($${accounts[k]})`;
-        acc.appendChild(opt);
-    });
+// 📡 LIVE DATA
+function listenData() {
+  const ref = doc(db, "users", uid);
+
+  onSnapshot(ref, (snap) => {
+    data = snap.data();
+
+    bal.innerText = data.balance || 0;
+
+    hist.innerHTML = (data.history || []).length
+      ? data.history.join("<br>")
+      : "No transactions.";
+  });
 }
 
-function show(t, type) {
-    msg.innerText = t;
-    msg.className = "msg " + type;
+// 📦 ACCOUNTS
+function loadAccounts() {
+  acc.innerHTML = "";
+  Object.keys(accounts).forEach(k => {
+    let opt = document.createElement("option");
+    opt.value = k;
+    opt.innerText = `${k} ($${accounts[k]})`;
+    acc.appendChild(opt);
+  });
+}
+
+// 📢 MESSAGE
+function show(t, c) {
+  msg.innerText = t;
+  msg.className = "msg " + c;
 }
 
 function getAmt() {
-    return Number(amt.value);
+  return Number(amt.value);
 }
 
-function getAcc() {
-    return acc.value;
-}
-
-// 💰 DEPOSIT (FIXED LOGIC)
+// 💰 DEPOSIT
 window.deposit = async function () {
-    if (!userData) return;
+  if (!data) return;
 
-    let a = getAmt();
-    let target = getAcc();
+  let a = getAmt();
+  if (a <= 0) return show("Invalid amount","error");
 
-    if (!a || a <= 0) return show("Invalid amount","error");
+  const ref = doc(db, "users", uid);
 
-    const ref = doc(db, "users", currentUser);
+  await updateDoc(ref, {
+    balance: (data.balance || 0) + a,
+    history: [`Deposited $${a}`, ...(data.history || [])]
+  });
 
-    await updateDoc(ref, {
-        balance: (userData.balance || 0) + a,
-        history: [`Deposited $${a} from ${target}`, ...(userData.history || [])]
-    });
-
-    amt.value = "";
+  amt.value = "";
 };
 
-// 💸 WITHDRAW (FIXED LOGIC)
+// 💸 WITHDRAW
 window.withdraw = async function () {
-    if (!userData) return;
+  if (!data) return;
 
-    let a = getAmt();
+  let a = getAmt();
+  if (a <= 0) return show("Invalid amount","error");
+  if (a > data.balance) return show("Not enough balance","error");
 
-    if (!a || a <= 0) return show("Invalid amount","error");
-    if (a > userData.balance) return show("Not enough balance","error");
+  const ref = doc(db, "users", uid);
 
-    const ref = doc(db, "users", currentUser);
+  await updateDoc(ref, {
+    balance: data.balance - a,
+    history: [`Withdrew $${a}`, ...(data.history || [])]
+  });
 
-    await updateDoc(ref, {
-        balance: userData.balance - a,
-        history: [`Withdrew $${a}`, ...(userData.history || [])]
-    });
-
-    amt.value = "";
+  amt.value = "";
 };
 
-// 🔁 TRANSFER (REAL FIXED LOGIC)
+// 🔁 TRANSFER
 window.transfer = async function () {
-    if (!userData) return;
+  if (!data) return;
 
-    let a = getAmt();
-    if (!a || a <= 0) return show("Invalid amount","error");
+  let a = getAmt();
+  if (a <= 0) return show("Invalid amount","error");
 
-    const ref = doc(db, "users", currentUser);
+  const ref = doc(db, "users", uid);
 
-    await updateDoc(ref, {
-        balance: (userData.balance || 0) - a,
-        history: [`Transferred $${a}`, ...(userData.history || [])]
-    });
+  await updateDoc(ref, {
+    balance: (data.balance || 0) - a,
+    history: [`Transferred $${a}`, ...(data.history || [])]
+  });
 
-    amt.value = "";
+  amt.value = "";
 };
 
-// 🎁 DAILY REWARD FIXED
+// 🎁 DAILY REWARD
 window.daily = async function () {
-    if (!userData) return;
+  if (!data) return;
 
-    let now = Date.now();
-    let last = userData.lastReward || 0;
+  let now = Date.now();
+  let last = data.lastReward || 0;
 
-    if (now - last < 86400000)
-        return show("Come back tomorrow","error");
+  if (now - last < 86400000)
+    return show("Come back tomorrow","error");
 
-    const ref = doc(db, "users", currentUser);
+  const ref = doc(db, "users", uid);
 
-    await updateDoc(ref, {
-        balance: (userData.balance || 0) + 50,
-        lastReward: now,
-        history: ["Daily reward +$50", ...(userData.history || [])]
-    });
+  await updateDoc(ref, {
+    balance: (data.balance || 0) + 50,
+    lastReward: now,
+    history: ["Daily reward +$50", ...(data.history || [])]
+  });
 };
 
+// 🚪 LOGOUT
 window.logout = function () {
-    signOut(auth);
+  signOut(auth);
 };
 </script>
-
-</body>
-</html>
