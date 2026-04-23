@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -105,37 +104,36 @@ button {
 </div>
 
 <div class="container">
-<div class="card">
+    <div class="card">
+        <div class="balance-box">
+            Balance<br>
+            $<span id="bal">0</span>
+        </div>
 
-<div class="balance-box">
-Balance<br>
-$<span id="bal">0</span>
-</div>
+        <select id="acc"></select>
 
-<select id="acc"></select>
+        <input id="amt" type="number" placeholder="Enter amount">
 
-<input id="amt" type="number" placeholder="Enter amount">
+        <div class="row">
+            <button class="primary" onclick="deposit()">Deposit</button>
+            <button class="primary" onclick="withdraw()">Withdraw</button>
+        </div>
 
-<div class="row">
-<button class="primary" onclick="deposit()">Deposit</button>
-<button class="primary" onclick="withdraw()">Withdraw</button>
-</div>
+        <button class="primary" onclick="transfer()">Transfer</button> 
+        <button class="success" onclick="daily()">Claim Daily $50</button>
 
-<button class="primary" onclick="transfer()">Transfer</button> <button class="success" onclick="daily()">Claim Daily $50</button>
+        <div class="history" id="hist"></div>
 
-<div class="history" id="hist"></div>
+        <button class="danger" onclick="logout()">Logout</button>
 
-<button class="danger" onclick="logout()">Logout</button>
-
-<p id="msg" class="msg"></p>
-
-</div>
+        <p id="msg" class="msg"></p>
+    </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, updateDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
@@ -153,153 +151,117 @@ const db = getFirestore(app);
 let currentUser = null;
 let userData = null;
 
-// BANK ACCOUNTS
 const accounts = {
     "ACC1001": 500,
     "ACC1002": 1200,
     "ACC1003": 300
 };
 
-// AUTH CHECK
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.replace("login.html");
         return;
     }
-
     currentUser = user.uid;
     userEmail.innerText = user.email;
-
-    // 🔥 ENSURE USER DOC EXISTS (CRITICAL FIX)
-    const ref = doc(db, "users", currentUser);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-        await setDoc(ref, {
-            balance: 100,
-            history: [],
-            lastReward: 0
-        });
-    }
-
     loadData();
     updateAccountsUI();
 });
 
 function loadData() {
     const ref = doc(db, "users", currentUser);
-
     onSnapshot(ref, (snap) => {
         if (!snap.exists()) return;
-
         userData = snap.data();
-
-        document.getElementById("bal").innerText = userData.balance ?? 0;
-
+        bal.innerText = userData.balance ?? 0;
         const hist = userData.history || [];
-        document.getElementById("hist").innerHTML =
-            hist.length ? hist.join("<br>") : "No transactions.";
+        document.getElementById("hist").innerHTML = hist.length ? hist.join("<br>") : "No transactions.";
     });
 }
 
-// FIX DROPDOWN ALWAYS
 function updateAccountsUI() {
     const acc = document.getElementById("acc");
     acc.innerHTML = "";
-
-    Object.keys(accounts).forEach(k => {
-        let opt = document.createElement("option");
+    for (let k in accounts) {
+        const opt = document.createElement("option");
         opt.value = k;
         opt.textContent = `${k} ($${accounts[k]})`;
         acc.appendChild(opt);
-    });
+    }
 }
 
 function show(text, type) {
+    const msg = document.getElementById("msg");
     msg.innerText = text;
     msg.className = "msg " + type;
 }
 
-// GET VALUES SAFELY
-function amtVal() {
-    return Number(document.getElementById("amt").value);
-}
-function accVal() {
-    return document.getElementById("acc").value;
-}
+function getAmt() { return Number(document.getElementById("amt").value); }
+function getAcc() { return document.getElementById("acc").value; }
 
-// 🔥 DEPOSIT FIXED
-window.deposit = async function () {
-    if (!userData) return;
-
-    let a = amtVal();
-    let target = accVal();
-
-    if (!a || a <= 0) return show("Invalid amount","error");
-    if (!accounts[target]) return show("Select account","error");
-    if (a > accounts[target]) return show("Bank has less money","error");
-
-    const ref = doc(db, "users", currentUser);
-
-    accounts[target] -= a;
-
-    await updateDoc(ref, {
-        balance: (userData.balance || 0) + a,
-        history: [`Deposited $${a} from ${target}`, ...(userData.history || [])]
-    });
-
-    document.getElementById("amt").value = "";
-};
-
-// 🔥 WITHDRAW FIXED
-window.withdraw = async function () {
-    if (!userData) return;
-
-    let a = amtVal();
-    let target = accVal();
-
-    if (!a || a <= 0) return show("Invalid amount","error");
-    if (a > userData.balance) return show("Not enough balance","error");
-
-    const ref = doc(db, "users", currentUser);
-
-    accounts[target] += a;
-
-    await updateDoc(ref, {
-        balance: userData.balance - a,
-        history: [`Withdrew $${a} to ${target}`, ...(userData.history || [])]
-    });
-
-    document.getElementById("amt").value = "";
-};
-
-window.transfer = function () {
-    deposit();
-};
-
-// 🔥 DAILY FIXED 100%
 window.daily = async function () {
     if (!userData) return;
-
-    let now = Date.now();
-    let last = userData.lastReward || 0;
+    const now = Date.now();
+    const last = userData.lastReward || 0;
 
     if (now - last < 86400000) {
-        return show("Come back tomorrow","error");
+        show("Come back tomorrow", "error");
+        return;
     }
 
     const ref = doc(db, "users", currentUser);
-
     await updateDoc(ref, {
         balance: (userData.balance || 0) + 50,
         lastReward: now,
         history: ["Daily reward +$50", ...(userData.history || [])]
     });
-
-    show("Reward claimed","success-msg");
+    show("Reward claimed!", "success-msg");
 };
 
-// logout
+window.deposit = async function () {
+    let a = getAmt();
+    let target = getAcc();
+
+    if (!a || a <= 0) return show("Invalid amount", "error");
+    if (a > accounts[target]) return show("Bank has less money", "error");
+
+    const ref = doc(db, "users", currentUser);
+    const snap = await getDoc(ref);
+    let data = snap.data();
+
+    accounts[target] -= a;
+    updateAccountsUI();
+
+    await updateDoc(ref, {
+        balance: (data.balance || 0) + a,
+        history: [`Deposited $${a} from ${target}`, ...(data.history || [])]
+    });
+    document.getElementById("amt").value = "";
+};
+
+window.withdraw = async function () {
+    let a = getAmt();
+    let target = getAcc();
+
+    if (!a || a <= 0) return show("Invalid amount", "error");
+    if (!userData || a > userData.balance) return show("Not enough balance", "error");
+
+    const ref = doc(db, "users", currentUser);
+
+    accounts[target] += a;
+    updateAccountsUI();
+
+    await updateDoc(ref, {
+        balance: userData.balance - a,
+        history: [`Withdrew $${a} to ${target}`, ...(userData.history || [])]
+    });
+    document.getElementById("amt").value = "";
+};
+
+window.transfer = function () {
+    window.deposit();
+};
+
 window.logout = function () {
     signOut(auth);
 };
