@@ -154,9 +154,9 @@ let currentUser = null;
 let userData = null;
 
 const accounts = {
-    "ACC1001": 500,
-    "ACC1002": 1200,
-    "ACC1003": 300
+  "ACC1001": 500,
+  "ACC1002": 1200,
+  "ACC1003": 300
 };
 
 const bal = document.getElementById("bal");
@@ -166,130 +166,166 @@ const amt = document.getElementById("amt");
 const msg = document.getElementById("msg");
 const hist = document.getElementById("hist");
 
-onAuthStateChanged(auth, (user) => {
-    if (!user) return window.location.replace("login.html");
-
-    currentUser = user.uid;
-    email.innerText = user.email;
-
-    const ref = doc(db, "users", currentUser);
-
-    onSnapshot(ref, (snap) => {
-        if (!snap.exists()) return;
-
-        userData = snap.data();
-
-        bal.innerText = userData.balance || 0;
-
-        hist.innerHTML = (userData.history || []).length
-            ? userData.history.join("<br>")
-            : "No transactions.";
-    });
-
-    loadAccounts();
-});
-
-function loadAccounts() {
-    acc.innerHTML = "";
-    Object.keys(accounts).forEach(k => {
-        let opt = document.createElement("option");
-        opt.value = k;
-        opt.textContent = `${k} ($${accounts[k]})`;
-        acc.appendChild(opt);
-    });
-}
-
 function show(t, type) {
-    msg.innerText = t;
-    msg.className = "msg " + type;
+  msg.innerText = t;
+  msg.className = "msg " + type;
 }
 
 function getAmt() {
-    return Number(amt.value);
+  return Number(amt.value);
 }
 
 function getAcc() {
-    return acc.value;
+  return acc.value;
 }
 
-// 💰 DEPOSIT (FIXED LOGIC)
+onAuthStateChanged(auth, (user) => {
+  if (!user) return window.location.replace("login.html");
+
+  currentUser = user.uid;
+  email.innerText = user.email;
+
+  const ref = doc(db, "users", currentUser);
+
+  onSnapshot(ref, (snap) => {
+    if (!snap.exists()) return;
+
+    userData = snap.data();
+    bal.innerText = userData.balance || 0;
+
+    hist.innerHTML = (userData.history || []).length
+      ? userData.history.join("<br>")
+      : "No transactions.";
+  });
+
+  loadAccounts();
+});
+
+function loadAccounts() {
+  acc.innerHTML = "";
+  Object.keys(accounts).forEach(k => {
+    let opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = `${k} ($${accounts[k]})`;
+    acc.appendChild(opt);
+  });
+}
+
+// 💰 DEPOSIT
 window.deposit = async function () {
-    if (!userData) return;
+  if (!userData) return;
 
-    let a = getAmt();
-    let target = getAcc();
+  let a = getAmt();
+  let target = getAcc();
 
-    if (!a || a <= 0) return show("Invalid amount","error");
+  if (!a || a <= 0) return show("Invalid amount", "error");
 
+  try {
     const ref = doc(db, "users", currentUser);
 
+    userData.balance += a;
+    bal.innerText = userData.balance;
+
     await updateDoc(ref, {
-        balance: (userData.balance || 0) + a,
-        history: [`Deposited $${a} from ${target}`, ...(userData.history || [])]
+      balance: userData.balance,
+      history: [`Deposited $${a} from ${target}`, ...(userData.history || [])]
     });
 
+    show("Deposit successful!", "success-msg");
     amt.value = "";
+  } catch (e) {
+    show("Deposit failed", "error");
+    console.log(e);
+  }
 };
 
-// 💸 WITHDRAW (FIXED LOGIC)
+// 💸 WITHDRAW
 window.withdraw = async function () {
-    if (!userData) return;
+  if (!userData) return;
 
-    let a = getAmt();
+  let a = getAmt();
 
-    if (!a || a <= 0) return show("Invalid amount","error");
-    if (a > userData.balance) return show("Not enough balance","error");
+  if (!a || a <= 0) return show("Invalid amount", "error");
+  if (a > userData.balance) return show("Not enough balance", "error");
 
+  try {
     const ref = doc(db, "users", currentUser);
 
+    userData.balance -= a;
+    bal.innerText = userData.balance;
+
     await updateDoc(ref, {
-        balance: userData.balance - a,
-        history: [`Withdrew $${a}`, ...(userData.history || [])]
+      balance: userData.balance,
+      history: [`Withdrew $${a}`, ...(userData.history || [])]
     });
 
+    show("Withdrawal successful!", "success-msg");
     amt.value = "";
+  } catch (e) {
+    show("Withdraw failed", "error");
+    console.log(e);
+  }
 };
 
-// 🔁 TRANSFER (REAL FIXED LOGIC)
+// 🔁 TRANSFER
 window.transfer = async function () {
-    if (!userData) return;
+  if (!userData) return;
 
-    let a = getAmt();
-    if (!a || a <= 0) return show("Invalid amount","error");
+  let a = getAmt();
+  let target = getAcc();
 
+  if (!a || a <= 0) return show("Invalid amount", "error");
+  if (a > userData.balance) return show("Not enough balance", "error");
+
+  try {
     const ref = doc(db, "users", currentUser);
 
+    userData.balance -= a;
+    bal.innerText = userData.balance;
+
     await updateDoc(ref, {
-        balance: (userData.balance || 0) - a,
-        history: [`Transferred $${a}`, ...(userData.history || [])]
+      balance: userData.balance,
+      history: [`Transferred $${a} to ${target}`, ...(userData.history || [])]
     });
 
+    show("Transfer successful!", "success-msg");
     amt.value = "";
+  } catch (e) {
+    show("Transfer failed", "error");
+    console.log(e);
+  }
 };
 
-// 🎁 DAILY REWARD FIXED
+// 🎁 DAILY
 window.daily = async function () {
-    if (!userData) return;
+  if (!userData) return;
 
-    let now = Date.now();
-    let last = userData.lastReward || 0;
+  let now = Date.now();
+  let last = userData.lastReward || 0;
 
-    if (now - last < 86400000)
-        return show("Come back tomorrow","error");
+  if (now - last < 86400000)
+    return show("Come back tomorrow", "error");
 
+  try {
     const ref = doc(db, "users", currentUser);
 
+    userData.balance += 50;
+    bal.innerText = userData.balance;
+
     await updateDoc(ref, {
-        balance: (userData.balance || 0) + 50,
-        lastReward: now,
-        history: ["Daily reward +$50", ...(userData.history || [])]
+      balance: userData.balance,
+      lastReward: now,
+      history: ["Daily reward +$50", ...(userData.history || [])]
     });
+
+    show("Daily reward claimed!", "success-msg");
+  } catch (e) {
+    show("Failed to claim reward", "error");
+    console.log(e);
+  }
 };
 
 window.logout = function () {
-    signOut(auth);
+  signOut(auth);
 };
 </script>
-
-</body>
-</html>
