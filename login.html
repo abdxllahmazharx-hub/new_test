@@ -26,9 +26,7 @@ body {
     text-align: center;
 }
 
-h2 {
-    margin-bottom: 20px;
-}
+h2 { margin-bottom: 20px; }
 
 input {
     width: 100%;
@@ -36,7 +34,6 @@ input {
     margin-top: 10px;
     border-radius: 8px;
     border: 1px solid #ccc;
-    font-size: 14px;
 }
 
 button {
@@ -54,9 +51,7 @@ button {
     color: white;
 }
 
-.main-btn:hover {
-    background: #333;
-}
+.main-btn:hover { background: #333; }
 
 .google-btn {
     display: flex;
@@ -71,9 +66,7 @@ button {
     width: 20px;
 }
 
-.google-btn:hover {
-    background: #f1f1f1;
-}
+.google-btn:hover { background: #f1f1f1; }
 
 .msg {
     font-size: 12px;
@@ -84,12 +77,11 @@ button {
 .error { color: red; }
 .success { color: green; }
 
-hr {
-    margin: 18px 0;
-}
+hr { margin: 18px 0; }
 </style>
 
 </head>
+
 <body>
 
 <div class="card">
@@ -116,8 +108,8 @@ hr {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
@@ -125,8 +117,7 @@ const firebaseConfig = {
   projectId: "bankdatabaseofficial",
   storageBucket: "bankdatabaseofficial.firebasestorage.app",
   messagingSenderId: "171337934322",
-  appId: "1:171337934322:web:7bd324dc985b6db019f76b",
-  measurementId: "G-LP79ZPNPD8"
+  appId: "1:171337934322:web:7bd324dc985b6db019f76b"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -140,11 +131,19 @@ function show(text, type) {
     msg.className = "msg " + type;
 }
 
+// auto redirect if already logged in
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        window.location.href = "index.html";
+    }
+});
+
 window.register = async function () {
     try {
         const cred = await createUserWithEmailAndPassword(auth, email.value, password.value);
 
         await setDoc(doc(db, "users", cred.user.uid), {
+            email: cred.user.email,
             balance: 100,
             history: [],
             lastReward: 0
@@ -171,12 +170,17 @@ window.googleLogin = async function () {
         const result = await signInWithPopup(auth, provider);
 
         const user = result.user;
+        const ref = doc(db, "users", user.uid);
+        const snap = await getDoc(ref);
 
-        await setDoc(doc(db, "users", user.uid), {
-            balance: 100,
-            history: [],
-            lastReward: 0
-        }, { merge: true });
+        if (!snap.exists()) {
+            await setDoc(ref, {
+                email: user.email,
+                balance: 100,
+                history: [],
+                lastReward: 0
+            });
+        }
 
         window.location.href = "index.html";
     } catch (e) {
