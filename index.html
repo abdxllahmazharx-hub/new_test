@@ -17,7 +17,6 @@ body {
   padding: 12px 20px;
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
 }
 
 .container {
@@ -31,7 +30,6 @@ body {
   width: 360px;
   padding: 25px;
   border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
 .balance-box {
@@ -43,17 +41,10 @@ body {
   margin-bottom: 15px;
 }
 
-.balance-box span {
-  font-size: 26px;
-  font-weight: bold;
-}
-
 input, select {
   width: 100%;
   padding: 10px;
   margin: 10px 0;
-  border-radius: 8px;
-  border: 1px solid #ccc;
 }
 
 button {
@@ -61,33 +52,21 @@ button {
   padding: 11px;
   margin-top: 10px;
   border: none;
-  border-radius: 8px;
-  font-weight: bold;
   cursor: pointer;
 }
 
 .primary { background: black; color: white; }
-.success { background: #27ae60; color: white; }
-.danger { background: #c0392b; color: white; }
-
-.row { display: flex; gap: 8px; }
+.success { background: green; color: white; }
+.danger { background: red; color: white; }
 
 .history {
   height: 120px;
   overflow-y: auto;
-  background: #f0f0f0;
-  border-radius: 8px;
+  background: #eee;
   padding: 8px;
-  font-size: 12px;
 }
 
-.msg {
-  text-align: center;
-  font-size: 12px;
-  margin-top: 8px;
-  min-height: 15px;
-}
-
+.msg { font-size: 12px; }
 .error { color: red; }
 .success-msg { color: green; }
 </style>
@@ -111,16 +90,12 @@ $<span id="bal">0</span>
 <select id="acc"></select>
 <input id="amt" type="number" placeholder="Enter amount">
 
-<div class="row">
-<button class="primary" onclick="deposit()">Deposit</button>
-<button class="primary" onclick="withdraw()">Withdraw</button>
-</div>
-
-<button class="primary" onclick="transfer()">Transfer</button>
-<button class="success" onclick="daily()">Claim Daily $50</button>
-
 <div class="history" id="hist"></div>
 
+<button class="primary" onclick="deposit()">Deposit</button>
+<button class="primary" onclick="withdraw()">Withdraw</button>
+<button class="primary" onclick="transfer()">Transfer</button>
+<button class="success" onclick="daily()">Claim Daily $50</button>
 <button class="danger" onclick="logout()">Logout</button>
 
 <p id="msg" class="msg"></p>
@@ -134,7 +109,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA-fQhdRiyan8waGagWJcCLTqqr5c8jN3Q",
+  apiKey: "YOUR_KEY",
   authDomain: "finebankdatabase.firebaseapp.com",
   projectId: "finebankdatabase",
   storageBucket: "finebankdatabase.firebasestorage.app",
@@ -146,8 +121,17 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-let currentUser = null;
-let userData = { balance: 0, history: [], lastReward: 0 };
+let uid = null;
+let data = {
+  balance: 0,
+  accounts: {
+    ACC1001: 500,
+    ACC1002: 1200,
+    ACC1003: 300
+  },
+  history: [],
+  lastReward: 0
+};
 
 const bal = document.getElementById("bal");
 const email = document.getElementById("userEmail");
@@ -156,138 +140,117 @@ const amt = document.getElementById("amt");
 const msg = document.getElementById("msg");
 const hist = document.getElementById("hist");
 
-const accounts = {
-  "ACC1001": 500,
-  "ACC1002": 1200,
-  "ACC1003": 300
-};
-
-function show(t, type) {
+function show(t, type){
   msg.innerText = t;
   msg.className = "msg " + type;
 }
 
-function getAmt() {
-  return Number(amt.value);
-}
+function getAmt(){ return Number(amt.value); }
+function getAcc(){ return acc.value; }
 
-function getAcc() {
-  return acc.value;
-}
-
-function loadAccounts() {
+function loadAccounts(){
   acc.innerHTML = "";
-  Object.keys(accounts).forEach(k => {
+  Object.keys(data.accounts).forEach(k=>{
     let opt = document.createElement("option");
     opt.value = k;
-    opt.textContent = `${k} ($${accounts[k]})`;
+    opt.textContent = `${k} ($${data.accounts[k]})`;
     acc.appendChild(opt);
   });
 }
 
-onAuthStateChanged(auth, (user) => {
-  if (!user) return window.location.replace("login.html");
+onAuthStateChanged(auth, (user)=>{
+  if(!user) return window.location.href="login.html";
 
-  currentUser = user.uid;
+  uid = user.uid;
   email.innerText = user.email;
 
-  const ref = doc(db, "users", currentUser);
+  const ref = doc(db,"users",uid);
 
-  onSnapshot(ref, (snap) => {
-    if (snap.exists()) {
-      userData = snap.data();
-    }
+  onSnapshot(ref,(snap)=>{
+    if(snap.exists()) data = snap.data();
 
-    bal.innerText = userData.balance || 0;
+    bal.innerText = data.balance || 0;
+    loadAccounts();
 
-    hist.innerHTML = (userData.history || []).length
-      ? userData.history.join("<br>")
-      : "No transactions.";
+    hist.innerHTML = (data.history||[]).join("<br>") || "No transactions";
   });
-
-  loadAccounts();
 });
 
-// 💰 DEPOSIT
-window.deposit = async function () {
+async function save(){
+  const ref = doc(db,"users",uid);
+  await setDoc(ref,data,{merge:true});
+}
+
+/* 💰 DEPOSIT (uses selected account only if enough exists) */
+window.deposit = async function(){
   let a = getAmt();
-  let target = getAcc();
+  let accId = getAcc();
 
-  if (!a || a <= 0) return show("Invalid amount", "error");
+  if(!a || a<=0) return show("Invalid amount","error");
 
-  userData.balance += a;
+  if(data.accounts[accId] < a)
+    return show("Not enough in selected account","error");
 
-  const ref = doc(db, "users", currentUser);
+  data.accounts[accId] -= a;
+  data.balance += a;
 
-  await setDoc(ref, userData, { merge: true });
+  data.history.unshift(`Deposited $${a} from ${accId}`);
 
-  userData.history.unshift(`Deposited $${a} from ${target}`);
-  show("Deposit successful!", "success-msg");
-  amt.value = "";
+  await save();
+  show("Deposit success","success-msg");
 };
 
-// 💸 WITHDRAW
-window.withdraw = async function () {
+/* 💸 WITHDRAW */
+window.withdraw = async function(){
   let a = getAmt();
+  let accId = getAcc();
 
-  if (!a || a <= 0) return show("Invalid amount", "error");
-  if (a > userData.balance) return show("Not enough balance", "error");
+  if(!a || a<=0) return show("Invalid amount","error");
+  if(data.balance < a) return show("Not enough balance","error");
 
-  userData.balance -= a;
+  data.accounts[accId] += a;
+  data.balance -= a;
 
-  const ref = doc(db, "users", currentUser);
+  data.history.unshift(`Withdrew $${a} to ${accId}`);
 
-  userData.history.unshift(`Withdrew $${a}`);
-
-  await setDoc(ref, userData, { merge: true });
-
-  show("Withdrawal successful!", "success-msg");
-  amt.value = "";
+  await save();
+  show("Withdraw success","success-msg");
 };
 
-// 🔁 TRANSFER
-window.transfer = async function () {
+/* 🔁 TRANSFER */
+window.transfer = async function(){
   let a = getAmt();
-  let target = getAcc();
+  let accId = getAcc();
 
-  if (!a || a <= 0) return show("Invalid amount", "error");
-  if (a > userData.balance) return show("Not enough balance", "error");
+  if(!a || a<=0) return show("Invalid amount","error");
+  if(data.balance < a) return show("Not enough balance","error");
 
-  userData.balance -= a;
+  data.balance -= a;
+  data.accounts[accId] += a;
 
-  const ref = doc(db, "users", currentUser);
+  data.history.unshift(`Transferred $${a} to ${accId}`);
 
-  userData.history.unshift(`Transferred $${a} to ${target}`);
-
-  await setDoc(ref, userData, { merge: true });
-
-  show("Transfer successful!", "success-msg");
-  amt.value = "";
+  await save();
+  show("Transfer success","success-msg");
 };
 
-// 🎁 DAILY
-window.daily = async function () {
+/* 🎁 DAILY */
+window.daily = async function(){
   let now = Date.now();
 
-  if (now - (userData.lastReward || 0) < 86400000)
-    return show("Come back tomorrow", "error");
+  if(now - (data.lastReward||0) < 86400000)
+    return show("Already claimed","error");
 
-  userData.balance += 50;
-  userData.lastReward = now;
+  data.balance += 50;
+  data.lastReward = now;
 
-  const ref = doc(db, "users", currentUser);
+  data.history.unshift("Daily +$50");
 
-  userData.history.unshift("Daily reward +$50");
-
-  await setDoc(ref, userData, { merge: true });
-
-  show("Daily reward claimed!", "success-msg");
+  await save();
+  show("Daily reward added","success-msg");
 };
 
-// 🚪 LOGOUT
-window.logout = function () {
-  signOut(auth);
-};
+window.logout = ()=> signOut(auth);
 </script>
 
 </body>
