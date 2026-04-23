@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fine-Bank Login</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #141e30, #243b55);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.card {
+    background: #fff;
+    padding: 30px;
+    width: 340px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 12px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.main-btn {
+    background: black;
+    color: white;
+}
+
+.main-btn:hover {
+    background: #333;
+}
+
+.google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: white;
+    border: 1px solid #ccc;
+}
+
+.google-btn img {
+    width: 20px;
+}
+
+.google-btn:hover {
+    background: #f1f1f1;
+}
+
+.msg {
+    font-size: 12px;
+    margin-top: 10px;
+    min-height: 15px;
+}
+
+.error { color: red; }
+.success { color: green; }
+
+hr {
+    margin: 18px 0;
+}
+</style>
+
+</head>
+<body>
+
+<div class="card">
+    <h2>Fine-Bank</h2>
+
+```
+<input id="email" type="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+
+<button class="main-btn" onclick="register()">Create Account</button>
+<button class="main-btn" onclick="login()">Login</button>
+
+<hr>
+
+<button class="google-btn" onclick="googleLogin()">
+    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg">
+    Sign in with Google
+</button>
+
+<p id="msg" class="msg"></p>
+```
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
+  authDomain: "bankdatabaseofficial.firebaseapp.com",
+  projectId: "bankdatabaseofficial",
+  storageBucket: "bankdatabaseofficial.firebasestorage.app",
+  messagingSenderId: "171337934322",
+  appId: "1:171337934322:web:7bd324dc985b6db019f76b",
+  measurementId: "G-LP79ZPNPD8"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const msg = document.getElementById("msg");
+
+function show(text, type) {
+    msg.innerText = text;
+    msg.className = "msg " + type;
+}
+
+window.register = async function () {
+    try {
+        const cred = await createUserWithEmailAndPassword(auth, email.value, password.value);
+
+        await setDoc(doc(db, "users", cred.user.uid), {
+            balance: 100,
+            history: [],
+            lastReward: 0
+        });
+
+        show("Account created!", "success");
+    } catch (e) {
+        show(e.message, "error");
+    }
+};
+
+window.login = async function () {
+    try {
+        await signInWithEmailAndPassword(auth, email.value, password.value);
+        window.location.href = "index.html";
+    } catch (e) {
+        show("Invalid login", "error");
+    }
+};
+
+window.googleLogin = async function () {
+    try {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+
+        const user = result.user;
+
+        await setDoc(doc(db, "users", user.uid), {
+            balance: 100,
+            history: [],
+            lastReward: 0
+        }, { merge: true });
+
+        window.location.href = "index.html";
+    } catch (e) {
+        show(e.message, "error");
+    }
+};
+</script>
+
+</body>
+</html>
