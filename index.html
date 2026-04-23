@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -54,7 +55,6 @@ input, select {
     margin: 10px 0;
     border-radius: 8px;
     border: 1px solid #ccc;
-    box-sizing: border-box;
 }
 
 button {
@@ -82,7 +82,6 @@ button {
     border-radius: 8px;
     padding: 8px;
     font-size: 12px;
-    margin-top: 10px;
 }
 
 .msg {
@@ -106,36 +105,37 @@ button {
 </div>
 
 <div class="container">
-    <div class="card">
-        <div class="balance-box">
-            Balance<br>
-            $<span id="bal">0</span>
-        </div>
+<div class="card">
 
-        <select id="acc"></select>
+<div class="balance-box">
+Balance<br>
+$<span id="bal">0</span>
+</div>
 
-        <input id="amt" type="number" placeholder="Enter amount">
+<select id="acc"></select>
 
-        <div class="row">
-            <button class="primary" onclick="deposit()">Deposit</button>
-            <button class="primary" onclick="withdraw()">Withdraw</button>
-        </div>
+<input id="amt" type="number" placeholder="Enter amount">
 
-        <button class="primary" onclick="transfer()">Transfer</button> 
-        <button class="success" onclick="daily()">Claim Daily $50</button>
+<div class="row">
+<button class="primary" onclick="deposit()">Deposit</button>
+<button class="primary" onclick="withdraw()">Withdraw</button>
+</div>
 
-        <div class="history" id="hist"></div>
+<button class="primary" onclick="transfer()">Transfer</button> <button class="success" onclick="daily()">Claim Daily $50</button>
 
-        <button class="danger" onclick="logout()">Logout</button>
+<div class="history" id="hist"></div>
 
-        <p id="msg" class="msg"></p>
-    </div>
+<button class="danger" onclick="logout()">Logout</button>
+
+<p id="msg" class="msg"></p>
+
+</div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
@@ -153,129 +153,137 @@ const db = getFirestore(app);
 let currentUser = null;
 let userData = null;
 
-// UI Elements
-const balDisplay = document.getElementById("bal");
-const emailDisplay = document.getElementById("userEmail");
-const amountInput = document.getElementById("amt");
-const accSelect = document.getElementById("acc");
-const msgDisplay = document.getElementById("msg");
-const histDisplay = document.getElementById("hist");
-
 const accounts = {
     "ACC1001": 500,
     "ACC1002": 1200,
     "ACC1003": 300
 };
 
-onAuthStateChanged(auth, (user) => {
-    if (!user) {
-        window.location.replace("login.html");
-        return;
-    }
-    currentUser = user.uid;
-    emailDisplay.innerText = user.email;
-    loadData();
-    updateAccountsUI();
-});
+const bal = document.getElementById("bal");
+const email = document.getElementById("userEmail");
+const acc = document.getElementById("acc");
+const amt = document.getElementById("amt");
+const msg = document.getElementById("msg");
+const hist = document.getElementById("hist");
 
-function loadData() {
+onAuthStateChanged(auth, (user) => {
+    if (!user) return window.location.replace("login.html");
+
+    currentUser = user.uid;
+    email.innerText = user.email;
+
     const ref = doc(db, "users", currentUser);
+
     onSnapshot(ref, (snap) => {
         if (!snap.exists()) return;
+
         userData = snap.data();
-        balDisplay.innerText = userData.balance ?? 0;
-        const hist = userData.history || [];
-        histDisplay.innerHTML = hist.length ? hist.join("<br>") : "No transactions.";
+
+        bal.innerText = userData.balance || 0;
+
+        hist.innerHTML = (userData.history || []).length
+            ? userData.history.join("<br>")
+            : "No transactions.";
+    });
+
+    loadAccounts();
+});
+
+function loadAccounts() {
+    acc.innerHTML = "";
+    Object.keys(accounts).forEach(k => {
+        let opt = document.createElement("option");
+        opt.value = k;
+        opt.textContent = `${k} ($${accounts[k]})`;
+        acc.appendChild(opt);
     });
 }
 
-function updateAccountsUI() {
-    accSelect.innerHTML = "";
-    for (let k in accounts) {
-        const opt = document.createElement("option");
-        opt.value = k;
-        opt.textContent = `${k} ($${accounts[k]})`;
-        accSelect.appendChild(opt);
-    }
+function show(t, type) {
+    msg.innerText = t;
+    msg.className = "msg " + type;
 }
 
-function show(text, type) {
-    msgDisplay.innerText = text;
-    msgDisplay.className = "msg " + type;
+function getAmt() {
+    return Number(amt.value);
 }
 
-// Global functions for buttons
+function getAcc() {
+    return acc.value;
+}
+
+// 💰 DEPOSIT (FIXED LOGIC)
+window.deposit = async function () {
+    if (!userData) return;
+
+    let a = getAmt();
+    let target = getAcc();
+
+    if (!a || a <= 0) return show("Invalid amount","error");
+
+    const ref = doc(db, "users", currentUser);
+
+    await updateDoc(ref, {
+        balance: (userData.balance || 0) + a,
+        history: [`Deposited $${a} from ${target}`, ...(userData.history || [])]
+    });
+
+    amt.value = "";
+};
+
+// 💸 WITHDRAW (FIXED LOGIC)
+window.withdraw = async function () {
+    if (!userData) return;
+
+    let a = getAmt();
+
+    if (!a || a <= 0) return show("Invalid amount","error");
+    if (a > userData.balance) return show("Not enough balance","error");
+
+    const ref = doc(db, "users", currentUser);
+
+    await updateDoc(ref, {
+        balance: userData.balance - a,
+        history: [`Withdrew $${a}`, ...(userData.history || [])]
+    });
+
+    amt.value = "";
+};
+
+// 🔁 TRANSFER (REAL FIXED LOGIC)
+window.transfer = async function () {
+    if (!userData) return;
+
+    let a = getAmt();
+    if (!a || a <= 0) return show("Invalid amount","error");
+
+    const ref = doc(db, "users", currentUser);
+
+    await updateDoc(ref, {
+        balance: (userData.balance || 0) - a,
+        history: [`Transferred $${a}`, ...(userData.history || [])]
+    });
+
+    amt.value = "";
+};
+
+// 🎁 DAILY REWARD FIXED
 window.daily = async function () {
     if (!userData) return;
-    const now = Date.now();
-    const last = userData.lastReward || 0;
 
-    if (now - last < 86400000) {
-        show("Come back tomorrow", "error");
-        return;
-    }
+    let now = Date.now();
+    let last = userData.lastReward || 0;
 
-    try {
-        const ref = doc(db, "users", currentUser);
-        await updateDoc(ref, {
-            balance: (userData.balance || 0) + 50,
-            lastReward: now,
-            history: ["Daily reward +$50", ...(userData.history || [])]
-        });
-        show("Reward claimed!", "success-msg");
-    } catch (e) {
-        show("Error claiming reward", "error");
-    }
-};
+    if (now - last < 86400000)
+        return show("Come back tomorrow","error");
 
-window.deposit = async function () {
-    let a = Number(amountInput.value);
-    let target = accSelect.value;
+    const ref = doc(db, "users", currentUser);
 
-    if (!a || a <= 0) return show("Invalid amount", "error");
-    if (a > accounts[target]) return show("Bank has less money", "error");
-
-    try {
-        const ref = doc(db, "users", currentUser);
-        accounts[target] -= a;
-        updateAccountsUI();
-
-        await updateDoc(ref, {
-            balance: (userData.balance || 0) + a,
-            history: [`Deposited $${a} from ${target}`, ...(userData.history || [])]
-        });
-        amountInput.value = "";
-        show("Deposit successful!", "success-msg");
-    } catch (e) {
-        show("Transaction failed", "error");
-    }
-};
-
-window.withdraw = async function () {
-    let a = Number(amountInput.value);
-    let target = accSelect.value;
-
-    if (!a || a <= 0) return show("Invalid amount", "error");
-    if (!userData || a > userData.balance) return show("Not enough balance", "error");
-
-    try {
-        const ref = doc(db, "users", currentUser);
-        accounts[target] += a;
-        updateAccountsUI();
-
-        await updateDoc(ref, {
-            balance: userData.balance - a,
-            history: [`Withdrew $${a} to ${target}`, ...(userData.history || [])]
-        });
-        amountInput.value = "";
-        show("Withdrawal successful!", "success-msg");
-    } catch (e) {
-        show("Transaction failed", "error");
-    }
-};
-
-window.transfer = function () {
-    window.deposit(); // Following your current logic where transfer triggers a deposit
+    await updateDoc(ref, {
+        balance: (userData.balance || 0) + 50,
+        lastReward: now,
+        history: ["Daily reward +$50", ...(userData.history || [])]
+    });
 };
 
 window.logout = function () {
