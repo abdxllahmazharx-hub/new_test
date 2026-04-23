@@ -153,14 +153,14 @@ const db = getFirestore(app);
 let currentUser = null;
 let userData = null;
 
-// FIXED BANK ACCOUNTS
+// demo bank accounts
 const accounts = {
     "ACC1001": 500,
     "ACC1002": 1200,
     "ACC1003": 300
 };
 
-// 🔐 AUTH GUARD (fix crash safe)
+// 🔐 AUTH GUARD
 onAuthStateChanged(auth, (user) => {
     if (!user) {
         window.location.replace("login.html");
@@ -168,11 +168,12 @@ onAuthStateChanged(auth, (user) => {
     }
 
     currentUser = user.uid;
-
-    const emailEl = document.getElementById("userEmail");
-    emailEl.innerText = user.email || "User";
+    userEmail.innerText = user.email;
 
     loadData();
+
+    // IMPORTANT: ALWAYS load dropdown immediately
+    updateAccountsUI();
 });
 
 function loadData() {
@@ -183,27 +184,25 @@ function loadData() {
 
         userData = snap.data();
 
-        document.getElementById("bal").innerText = userData.balance ?? 0;
+        bal.innerText = userData.balance ?? 0;
 
-        let hist = userData.history || [];
+        const hist = userData.history || [];
         document.getElementById("hist").innerHTML =
             hist.length ? hist.join("<br>") : "No transactions.";
-
-        updateAccountsUI();
     });
 }
 
-// FIXED dropdown (always safe)
+// FIXED DROPDOWN (always works)
 function updateAccountsUI() {
     const acc = document.getElementById("acc");
     acc.innerHTML = "";
 
-    Object.keys(accounts).forEach(k => {
-        let opt = document.createElement("option");
+    for (let k in accounts) {
+        const opt = document.createElement("option");
         opt.value = k;
         opt.textContent = `${k} ($${accounts[k]})`;
         acc.appendChild(opt);
-    });
+    }
 }
 
 function show(text, type) {
@@ -212,7 +211,6 @@ function show(text, type) {
     msg.className = "msg " + type;
 }
 
-// SAFE helpers
 function getAmt() {
     return Number(document.getElementById("amt").value);
 }
@@ -221,13 +219,35 @@ function getAcc() {
     return document.getElementById("acc").value;
 }
 
-// 🔥 DEPOSIT
+// 🔥 DAILY REWARD FIXED
+window.daily = async function () {
+    if (!userData) return;
+
+    const now = Date.now();
+    const last = userData.lastReward || 0;
+
+    if (now - last < 86400000) {
+        show("Come back tomorrow", "error");
+        return;
+    }
+
+    const ref = doc(db, "users", currentUser);
+
+    await updateDoc(ref, {
+        balance: (userData.balance || 0) + 50,
+        lastReward: now,
+        history: ["Daily reward +$50", ...(userData.history || [])]
+    });
+
+    show("Reward claimed!", "success-msg");
+};
+
+// deposit
 window.deposit = async function () {
     let a = getAmt();
     let target = getAcc();
 
     if (!a || a <= 0) return show("Invalid amount","error");
-    if (!accounts[target]) return show("Select account","error");
     if (a > accounts[target]) return show("Bank has less money","error");
 
     const ref = doc(db, "users", currentUser);
@@ -238,13 +258,13 @@ window.deposit = async function () {
 
     await updateDoc(ref, {
         balance: (data.balance || 0) + a,
-        history: [`Deposited $${a} from ${target}`, ...(data.history || [])],
+        history: [`Deposited $${a} from ${target}`, ...(data.history || [])]
     });
 
     document.getElementById("amt").value = "";
 };
 
-// 🔥 WITHDRAW
+// withdraw
 window.withdraw = async function () {
     let a = getAmt();
     let target = getAcc();
@@ -258,37 +278,16 @@ window.withdraw = async function () {
 
     await updateDoc(ref, {
         balance: userData.balance - a,
-        history: [`Withdrew $${a} to ${target}`, ...(userData.history || [])],
+        history: [`Withdrew $${a} to ${target}`, ...(userData.history || [])]
     });
 
     document.getElementById("amt").value = "";
 };
 
-// transfer = deposit
 window.transfer = function () {
-    deposit();
+    window.deposit();
 };
 
-// daily reward
-window.daily = async function () {
-    if (!userData) return;
-
-    let now = Date.now();
-    if (now - (userData.lastReward || 0) < 86400000)
-        return show("Come back tomorrow","error");
-
-    const ref = doc(db, "users", currentUser);
-
-    await updateDoc(ref, {
-        balance: userData.balance + 50,
-        lastReward: now,
-        history: ["Daily reward +$50", ...(userData.history || [])],
-    });
-
-    show("Reward claimed","success-msg");
-};
-
-// logout
 window.logout = function () {
     signOut(auth);
 };
@@ -296,3 +295,4 @@ window.logout = function () {
 
 </body>
 </html>
+
