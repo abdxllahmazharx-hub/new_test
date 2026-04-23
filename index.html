@@ -109,7 +109,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_KEY",
+  apiKey: "AIzaSyA-fQhdRiyan8waGagWJcCLTqqr5c8jN3Q",
   authDomain: "finebankdatabase.firebaseapp.com",
   projectId: "finebankdatabase",
   storageBucket: "finebankdatabase.firebasestorage.app",
@@ -122,7 +122,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let uid = null;
-let data = {
+let userData = {
   balance: 0,
   accounts: {
     ACC1001: 500,
@@ -150,107 +150,113 @@ function getAcc(){ return acc.value; }
 
 function loadAccounts(){
   acc.innerHTML = "";
-  Object.keys(data.accounts).forEach(k=>{
+  Object.keys(userData.accounts).forEach(k=>{
     let opt = document.createElement("option");
     opt.value = k;
-    opt.textContent = `${k} ($${data.accounts[k]})`;
+    opt.textContent = `${k} ($${userData.accounts[k]})`;
     acc.appendChild(opt);
   });
 }
 
-onAuthStateChanged(auth, (user)=>{
-  if(!user) return window.location.href="login.html";
+let authReady = false;
+
+onAuthStateChanged(auth, (user) => {
+  if (!authReady) authReady = true;
+
+  if (!user) {
+    window.location.replace("login.html");
+    return;
+  }
 
   uid = user.uid;
   email.innerText = user.email;
 
-  const ref = doc(db,"users",uid);
+  const ref = doc(db, "users", uid);
 
-  onSnapshot(ref,(snap)=>{
-    if(snap.exists()) data = snap.data();
+  onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      userData = snap.data();
+    }
 
-    bal.innerText = data.balance || 0;
+    bal.innerText = userData.balance || 0;
     loadAccounts();
 
-    hist.innerHTML = (data.history||[]).join("<br>") || "No transactions";
+    hist.innerHTML = (userData.history || []).length
+      ? userData.history.join("<br>")
+      : "No transactions";
   });
 });
 
-async function save(){
-  const ref = doc(db,"users",uid);
-  await setDoc(ref,data,{merge:true});
-}
-
-/* 💰 DEPOSIT (uses selected account only if enough exists) */
+// 💰 DEPOSIT
 window.deposit = async function(){
   let a = getAmt();
   let accId = getAcc();
 
   if(!a || a<=0) return show("Invalid amount","error");
+  if(userData.accounts[accId] < a)
+    return show("Not enough in account","error");
 
-  if(data.accounts[accId] < a)
-    return show("Not enough in selected account","error");
+  userData.accounts[accId] -= a;
+  userData.balance += a;
 
-  data.accounts[accId] -= a;
-  data.balance += a;
+  userData.history.unshift(`Deposited $${a} from ${accId}`);
 
-  data.history.unshift(`Deposited $${a} from ${accId}`);
-
-  await save();
+  await setDoc(doc(db,"users",uid),userData,{merge:true});
   show("Deposit success","success-msg");
 };
 
-/* 💸 WITHDRAW */
+// 💸 WITHDRAW
 window.withdraw = async function(){
   let a = getAmt();
   let accId = getAcc();
 
   if(!a || a<=0) return show("Invalid amount","error");
-  if(data.balance < a) return show("Not enough balance","error");
+  if(userData.balance < a) return show("Not enough balance","error");
 
-  data.accounts[accId] += a;
-  data.balance -= a;
+  userData.balance -= a;
+  userData.accounts[accId] += a;
 
-  data.history.unshift(`Withdrew $${a} to ${accId}`);
+  userData.history.unshift(`Withdrew $${a}`);
 
-  await save();
+  await setDoc(doc(db,"users",uid),userData,{merge:true});
   show("Withdraw success","success-msg");
 };
 
-/* 🔁 TRANSFER */
+// 🔁 TRANSFER
 window.transfer = async function(){
   let a = getAmt();
   let accId = getAcc();
 
   if(!a || a<=0) return show("Invalid amount","error");
-  if(data.balance < a) return show("Not enough balance","error");
+  if(userData.balance < a) return show("Not enough balance","error");
 
-  data.balance -= a;
-  data.accounts[accId] += a;
+  userData.balance -= a;
+  userData.accounts[accId] += a;
 
-  data.history.unshift(`Transferred $${a} to ${accId}`);
+  userData.history.unshift(`Transferred $${a} to ${accId}`);
 
-  await save();
+  await setDoc(doc(db,"users",uid),userData,{merge:true});
   show("Transfer success","success-msg");
 };
 
-/* 🎁 DAILY */
+// 🎁 DAILY
 window.daily = async function(){
   let now = Date.now();
 
-  if(now - (data.lastReward||0) < 86400000)
+  if(now - (userData.lastReward||0) < 86400000)
     return show("Already claimed","error");
 
-  data.balance += 50;
-  data.lastReward = now;
+  userData.balance += 50;
+  userData.lastReward = now;
 
-  data.history.unshift("Daily +$50");
+  userData.history.unshift("Daily +$50");
 
-  await save();
+  await setDoc(doc(db,"users",uid),userData,{merge:true});
   show("Daily reward added","success-msg");
 };
 
-window.logout = ()=> signOut(auth);
+// 🚪 LOGOUT
+window.logout = () => signOut(auth);
 </script>
 
 </body>
