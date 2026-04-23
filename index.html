@@ -134,12 +134,12 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
-  authDomain: "bankdatabaseofficial.firebaseapp.com",
-  projectId: "bankdatabaseofficial",
-  storageBucket: "bankdatabaseofficial.firebasestorage.app",
-  messagingSenderId: "171337934322",
-  appId: "1:171337934322:web:7bd324dc985b6db019f76b"
+  apiKey: "AIzaSyA-fQhdRiyan8waGagWJcCLTqqr5c8jN3Q",
+  authDomain: "finebankdatabase.firebaseapp.com",
+  projectId: "finebankdatabase",
+  storageBucket: "finebankdatabase.firebasestorage.app",
+  messagingSenderId: "769582800876",
+  appId: "1:769582800876:web:d9ad55f0b8a94f7a6e2ac9"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -147,7 +147,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let currentUser = null;
-let userData = null;
+let userData = { balance: 0, history: [], lastReward: 0 };
 
 const bal = document.getElementById("bal");
 const email = document.getElementById("userEmail");
@@ -194,7 +194,9 @@ onAuthStateChanged(auth, (user) => {
   const ref = doc(db, "users", currentUser);
 
   onSnapshot(ref, (snap) => {
-    userData = snap.exists() ? snap.data() : { balance: 0, history: [] };
+    if (snap.exists()) {
+      userData = snap.data();
+    }
 
     bal.innerText = userData.balance || 0;
 
@@ -213,16 +215,13 @@ window.deposit = async function () {
 
   if (!a || a <= 0) return show("Invalid amount", "error");
 
+  userData.balance += a;
+
   const ref = doc(db, "users", currentUser);
 
-  userData.balance = (userData.balance || 0) + a;
+  await setDoc(ref, userData, { merge: true });
 
-  await setDoc(ref, {
-    balance: userData.balance,
-    history: [`Deposited $${a} from ${target}`, ...(userData.history || [])],
-    lastReward: userData.lastReward || 0
-  }, { merge: true });
-
+  userData.history.unshift(`Deposited $${a} from ${target}`);
   show("Deposit successful!", "success-msg");
   amt.value = "";
 };
@@ -234,15 +233,13 @@ window.withdraw = async function () {
   if (!a || a <= 0) return show("Invalid amount", "error");
   if (a > userData.balance) return show("Not enough balance", "error");
 
-  const ref = doc(db, "users", currentUser);
-
   userData.balance -= a;
 
-  await setDoc(ref, {
-    balance: userData.balance,
-    history: [`Withdrew $${a}`, ...(userData.history || [])],
-    lastReward: userData.lastReward || 0
-  }, { merge: true });
+  const ref = doc(db, "users", currentUser);
+
+  userData.history.unshift(`Withdrew $${a}`);
+
+  await setDoc(ref, userData, { merge: true });
 
   show("Withdrawal successful!", "success-msg");
   amt.value = "";
@@ -256,15 +253,13 @@ window.transfer = async function () {
   if (!a || a <= 0) return show("Invalid amount", "error");
   if (a > userData.balance) return show("Not enough balance", "error");
 
-  const ref = doc(db, "users", currentUser);
-
   userData.balance -= a;
 
-  await setDoc(ref, {
-    balance: userData.balance,
-    history: [`Transferred $${a} to ${target}`, ...(userData.history || [])],
-    lastReward: userData.lastReward || 0
-  }, { merge: true });
+  const ref = doc(db, "users", currentUser);
+
+  userData.history.unshift(`Transferred $${a} to ${target}`);
+
+  await setDoc(ref, userData, { merge: true });
 
   show("Transfer successful!", "success-msg");
   amt.value = "";
@@ -273,20 +268,18 @@ window.transfer = async function () {
 // 🎁 DAILY
 window.daily = async function () {
   let now = Date.now();
-  let last = userData.lastReward || 0;
 
-  if (now - last < 86400000)
+  if (now - (userData.lastReward || 0) < 86400000)
     return show("Come back tomorrow", "error");
+
+  userData.balance += 50;
+  userData.lastReward = now;
 
   const ref = doc(db, "users", currentUser);
 
-  userData.balance += 50;
+  userData.history.unshift("Daily reward +$50");
 
-  await setDoc(ref, {
-    balance: userData.balance,
-    lastReward: now,
-    history: ["Daily reward +$50", ...(userData.history || [])]
-  }, { merge: true });
+  await setDoc(ref, userData, { merge: true });
 
   show("Daily reward claimed!", "success-msg");
 };
