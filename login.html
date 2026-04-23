@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -25,8 +24,6 @@ body {
     box-shadow: 0 10px 25px rgba(0,0,0,0.3);
     text-align: center;
 }
-
-h2 { margin-bottom: 20px; }
 
 input {
     width: 100%;
@@ -54,19 +51,17 @@ button {
 .main-btn:hover { background: #333; }
 
 .google-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
     background: white;
     border: 1px solid #ccc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
 }
 
 .google-btn img {
     width: 20px;
 }
-
-.google-btn:hover { background: #f1f1f1; }
 
 .msg {
     font-size: 12px;
@@ -105,16 +100,29 @@ hr { margin: 18px 0; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { 
+  getAuth, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc 
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAEAVcUrqN1RZGm_eCVTwTxVryfUpj9YRQ",
-  authDomain: "bankdatabaseofficial.firebaseapp.com",
-  projectId: "bankdatabaseofficial",
-  storageBucket: "bankdatabaseofficial.firebasestorage.app",
-  messagingSenderId: "171337934322",
-  appId: "1:171337934322:web:7bd324dc985b6db019f76b"
+  apiKey: "AIzaSyA-fQhdRiyan8waGagWJcCLTqqr5c8jN3Q",
+  authDomain: "finebankdatabase.firebaseapp.com",
+  projectId: "finebankdatabase",
+  storageBucket: "finebankdatabase.firebasestorage.app",
+  messagingSenderId: "769582800876",
+  appId: "1:769582800876:web:d9ad55f0b8a94f7a6e2ac9"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -122,22 +130,26 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const msg = document.getElementById("msg");
+const email = document.getElementById("email");
+const password = document.getElementById("password");
 
 function show(text, type) {
     msg.innerText = text;
     msg.className = "msg " + type;
 }
 
-// auto redirect if already logged in
+// auto redirect if logged in
 onAuthStateChanged(auth, (user) => {
-    if (user) {
-        window.location.href = "index.html";
-    }
+    if (user) window.location.href = "index.html";
 });
 
 window.register = async function () {
     try {
-        const cred = await createUserWithEmailAndPassword(auth, email.value, password.value);
+        const cred = await createUserWithEmailAndPassword(
+            auth,
+            email.value,
+            password.value
+        );
 
         await setDoc(doc(db, "users", cred.user.uid), {
             email: cred.user.email,
