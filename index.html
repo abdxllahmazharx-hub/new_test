@@ -107,31 +107,27 @@ button {
 <div class="container">
 <div class="card">
 
-```
 <div class="balance-box">
-    Balance<br>
-    $<span id="bal">0</span>
+Balance<br>
+$<span id="bal">0</span>
 </div>
 
-<!-- FIXED: dropdown ALWAYS loads -->
 <select id="acc"></select>
 
 <input id="amt" type="number" placeholder="Enter amount">
 
 <div class="row">
-    <button class="primary" onclick="deposit()">Deposit</button>
-    <button class="primary" onclick="withdraw()">Withdraw</button>
+<button class="primary" onclick="deposit()">Deposit</button>
+<button class="primary" onclick="withdraw()">Withdraw</button>
 </div>
 
-<button class="primary" onclick="transfer()">Transfer</button>
-<button class="success" onclick="daily()">Claim Daily $50</button>
+<button class="primary" onclick="transfer()">Transfer</button> <button class="success" onclick="daily()">Claim Daily $50</button>
 
 <div class="history" id="hist"></div>
 
 <button class="danger" onclick="logout()">Logout</button>
 
 <p id="msg" class="msg"></p>
-```
 
 </div>
 </div>
@@ -157,19 +153,25 @@ const db = getFirestore(app);
 let currentUser = null;
 let userData = null;
 
-// FIXED BANK ACCOUNTS (always loaded once)
+// FIXED BANK ACCOUNTS
 const accounts = {
     "ACC1001": 500,
     "ACC1002": 1200,
     "ACC1003": 300
 };
 
-// auth guard
+// 🔐 AUTH GUARD (fix crash safe)
 onAuthStateChanged(auth, (user) => {
-    if (!user) return window.location.replace("login.html");
+    if (!user) {
+        window.location.replace("login.html");
+        return;
+    }
 
     currentUser = user.uid;
-    userEmail.innerText = user.email;
+
+    const emailEl = document.getElementById("userEmail");
+    emailEl.innerText = user.email || "User";
+
     loadData();
 });
 
@@ -177,20 +179,23 @@ function loadData() {
     const ref = doc(db, "users", currentUser);
 
     onSnapshot(ref, (snap) => {
+        if (!snap.exists()) return;
+
         userData = snap.data();
 
-        bal.innerText = userData.balance;
+        document.getElementById("bal").innerText = userData.balance ?? 0;
 
-        hist.innerHTML = userData.history.length
-            ? userData.history.join("<br>")
-            : "No transactions.";
+        let hist = userData.history || [];
+        document.getElementById("hist").innerHTML =
+            hist.length ? hist.join("<br>") : "No transactions.";
 
         updateAccountsUI();
     });
 }
 
-// 🔥 FIXED: dropdown ALWAYS shows accounts correctly
+// FIXED dropdown (always safe)
 function updateAccountsUI() {
+    const acc = document.getElementById("acc");
     acc.innerHTML = "";
 
     Object.keys(accounts).forEach(k => {
@@ -202,15 +207,27 @@ function updateAccountsUI() {
 }
 
 function show(text, type) {
+    const msg = document.getElementById("msg");
     msg.innerText = text;
     msg.className = "msg " + type;
 }
 
-window.deposit = async function() {
-    let a = Number(amt.value);
-    let target = acc.value;
+// SAFE helpers
+function getAmt() {
+    return Number(document.getElementById("amt").value);
+}
+
+function getAcc() {
+    return document.getElementById("acc").value;
+}
+
+// 🔥 DEPOSIT
+window.deposit = async function () {
+    let a = getAmt();
+    let target = getAcc();
 
     if (!a || a <= 0) return show("Invalid amount","error");
+    if (!accounts[target]) return show("Select account","error");
     if (a > accounts[target]) return show("Bank has less money","error");
 
     const ref = doc(db, "users", currentUser);
@@ -220,39 +237,44 @@ window.deposit = async function() {
     accounts[target] -= a;
 
     await updateDoc(ref, {
-        balance: data.balance + a,
-        history: [`Deposited $${a} from ${target}`, ...data.history],
+        balance: (data.balance || 0) + a,
+        history: [`Deposited $${a} from ${target}`, ...(data.history || [])],
     });
 
-    amt.value = "";
+    document.getElementById("amt").value = "";
 };
 
-window.withdraw = async function() {
-    let a = Number(amt.value);
+// 🔥 WITHDRAW
+window.withdraw = async function () {
+    let a = getAmt();
+    let target = getAcc();
 
     if (!a || a <= 0) return show("Invalid amount","error");
-    if (a > userData.balance) return show("Not enough balance","error");
+    if (!userData || a > userData.balance) return show("Not enough balance","error");
 
     const ref = doc(db, "users", currentUser);
 
-    accounts[acc.value] += a;
+    accounts[target] += a;
 
     await updateDoc(ref, {
         balance: userData.balance - a,
-        history: [`Withdrew $${a} to ${acc.value}`, ...userData.history],
+        history: [`Withdrew $${a} to ${target}`, ...(userData.history || [])],
     });
 
-    amt.value = "";
+    document.getElementById("amt").value = "";
 };
 
-window.transfer = function() {
+// transfer = deposit
+window.transfer = function () {
     deposit();
 };
 
-window.daily = async function() {
-    let now = Date.now();
+// daily reward
+window.daily = async function () {
+    if (!userData) return;
 
-    if (now - userData.lastReward < 86400000)
+    let now = Date.now();
+    if (now - (userData.lastReward || 0) < 86400000)
         return show("Come back tomorrow","error");
 
     const ref = doc(db, "users", currentUser);
@@ -260,13 +282,14 @@ window.daily = async function() {
     await updateDoc(ref, {
         balance: userData.balance + 50,
         lastReward: now,
-        history: ["Daily reward +$50", ...userData.history],
+        history: ["Daily reward +$50", ...(userData.history || [])],
     });
 
-    show("Reward claimed","success");
+    show("Reward claimed","success-msg");
 };
 
-window.logout = function() {
+// logout
+window.logout = function () {
     signOut(auth);
 };
 </script>
